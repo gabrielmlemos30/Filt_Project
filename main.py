@@ -17,30 +17,48 @@ class analogFilt:
         self.t = np.arange(n) / self.fs
         
         self.signal = signal_data
+        self.order = 4
         self.W0 = 2*np.pi * self.fc
-        self.R = 0
+        self.R = np.zeros(int(self.order/2))
         self.C = 10**(-6)
         self.n = 1024
         self.RC = 0
         self.filtered_signal = None
-        "PARA BUTTERWORTH"
-        self.Q = np.sqrt(2)/2
-        self.order = 4
+        "PARA BUTTERWORTH, 4 ordem"
+        self.Q = np.zeros(int(self.order/2))
+        
+        "Ganhos"
+        self.K = np.zeros(int(self.order/2))
+        self.K[0] = 1
+        self.Rf = np.zeros(int(self.order/2))
+        self.Rg = np.zeros(int(self.order/2))
+        self.Rf[0] = 0
+        self.Rg[0] = 0
         
         "Executa as funções"
         self.fn_calculate()
-        self.fn_printAll()
         self.fn_SOS()
+        self.fn_printAll()
         
         # CORREÇÃO 2: Processa o sinal ANTES de tentar plotar os resultados
         self.fn_filter_signal()
         
-        self.fn_plot_bode()
-        self.fn_plot_signals()
-        self.fn_plot_fft()
+        # self.fn_plot_bode()
+        # self.fn_plot_signals()
+        # self.fn_plot_fft()
+        
     def fn_calculate(self):
         self.RC = 1/(self.W0)
-        self.R = int(self.RC / self.C)
+        self.Q[0] = 1/(3 - self.K[0])
+        "PARA BUTTERWORTH, O FATOR DE AMORTECIMENTO TOTAL DEVE SER IGUAL A 0,707, q[0].q[1]"
+        if self.order == 4:
+            self.Q[1] = np.sqrt(2)/2 / self.Q[0]
+            self.K[1] = 3 - 1/self.Q[1]
+            rf_divide_rg = 1 - self.K[1]
+            self.Rg[1] = 10000
+            self.Rf[1] = rf_divide_rg * self.Rg[1]
+            self.R[0] = self.RC / self.C / self.Q[0]
+            self.R[1] = self.Q[1]*self.RC * 2 / self.C
         return True
     
     def fn_SOS(self):
@@ -56,6 +74,7 @@ class analogFilt:
             "Normalizo"
             b_s = b_s / a_s[0]
             a_s = a_s / a_s[0]
+            "Posso pegar os valores de resitores a partir daqui"
             self.fn_plot_TF(b_s, a_s, i)
 
     def fn_plot_bode(self):
@@ -125,11 +144,21 @@ class analogFilt:
         print("========================================================")
         print("====RELATÓRIO DE COMPONENTES E LISTA DE MATERIAIS=======")
         print("========================================================")
-        print("========================================================")
-        print(f"R={self.R} ohm")
-        print("========================================================")
-        print(f"C={self.C} farad")
-        print("========================================================")
+        for i in range(0,int(self.order/2)):
+            print(f"================={i} ordem ============================")
+            print("========================================================")
+            print("========================================================")
+            print(f"R={self.R[i]} ohm")
+            print("========================================================")
+            print(f"C={self.C} farad")
+            print("========================================================")
+            print(f"Rf[{i}]={int(self.Rf[i])} ohm")
+            print("========================================================")
+            print(f"Rg[{i}]={int(self.Rg[i])} ohm")
+            print("========================================================")
+            print(f"Q[{i}]={self.Q[i]} ")
+            print("========================================================")
+            
         self.fn_SOS_TF()
     def fn_plot_fft(self):
         """ Calcula e plota a FFT do sinal bruto e do sinal filtrado """
