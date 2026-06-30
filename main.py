@@ -19,10 +19,12 @@ class analogFilt:
         self.signal = signal_data
         self.order = 4
         self.W0 = 2*np.pi * self.fc
-        self.R = np.zeros(int(self.order/2))
-        self.C = 10**(-6)
+        self.R = {"primeiro_estagio":[0,0],
+                  "segundo_estagio":[0,0]}
+        self.C = 0.00001
         self.n = 1024
-        self.RC = 0
+        self.RC = np.zeros(int(self.order/2))
+
         self.filtered_signal = None
         "PARA BUTTERWORTH, 4 ordem"
         self.Q = np.zeros(int(self.order/2))
@@ -35,31 +37,41 @@ class analogFilt:
         self.Rf[0] = 0
         self.Rg[0] = 0
         
+        
+        
         "Executa as funções"
         self.fn_calculate()
         self.fn_SOS()
         self.fn_printAll()
         
-        # CORREÇÃO 2: Processa o sinal ANTES de tentar plotar os resultados
+        
         self.fn_filter_signal()
         
-        # self.fn_plot_bode()
-        # self.fn_plot_signals()
-        # self.fn_plot_fft()
+        self.fn_plot_bode()
+        self.fn_plot_signals()
+        self.fn_plot_fft()
         
     def fn_calculate(self):
-        self.RC = 1/(self.W0)
-        self.Q[0] = 1/(3 - self.K[0])
-        "PARA BUTTERWORTH, O FATOR DE AMORTECIMENTO TOTAL DEVE SER IGUAL A 0,707, q[0].q[1]"
+        """ Calcula os componentes do filtro Sallen-Key para Butterworth de 4ª ordem """
+        
+        # Para Butterworth de 4ª ordem, os fatores Q são:
+        # Q1 = 0.5412 (para o primeiro estágio)
+        # Q2 = 1.3066 (para o segundo estágio)
+        # Estes valores vêm das raízes do polinômio de Butterworth
+        
         if self.order == 4:
-            self.Q[1] = np.sqrt(2)/2 / self.Q[0]
-            self.K[1] = 3 - 1/self.Q[1]
-            rf_divide_rg = 1 - self.K[1]
-            self.Rg[1] = 10000
-            self.Rf[1] = rf_divide_rg * self.Rg[1]
-            self.R[0] = self.RC / self.C / self.Q[0]
-            self.R[1] = self.Q[1]*self.RC * 2 / self.C
-        return True
+            # Fatores Q para Butterworth de 4ª ordem
+            self.Q[0] = 0.5412  
+            self.Q[1] = 1.3066  
+            
+            "Calculo dos resistores"
+            
+            self.R["primeiro_estagio"][0] = 1/(2*self.Q[0]*self.W0*self.C)
+            self.R["primeiro_estagio"][1] = 2*self.Q[0]/(self.W0*self.C)
+            
+            
+            self.R["segundo_estagio"][0] = 1/(2*self.Q[1]*self.W0*self.C)
+            self.R["segundo_estagio"][1] = 2*self.Q[1]/(self.W0*self.C)
     
     def fn_SOS(self):
         sos = spy_signal.butter(self.order, self.fc, btype='high', fs=self.fs, output='sos')
@@ -77,6 +89,23 @@ class analogFilt:
             "Posso pegar os valores de resitores a partir daqui"
             self.fn_plot_TF(b_s, a_s, i)
 
+    
+        
+    def fn_filter_signal(self):
+        """ Passa o sinal de entrada pela matriz de seções de segunda ordem (SOS) """
+        sos = self.fn_SOS()
+        # Usando sosfiltfilt para evitar qualquer atraso de fase na integração posterior
+        self.filtered_signal = spy_signal.sosfiltfilt(sos, self.signal)
+        
+    
+        
+    def fn_plot_TF(self, b, a, n_sessao):
+        print(f"\n[Seção {n_sessao+1}] H_{n_sessao+1}(s) =")
+        print(f"     {b[0]:.4e}*s^2 + {b[1]:.4e}*s + {b[2]:.4e}")
+        print(f"-------------------------------------------------------")
+        print(f"     {a[0]:.4e}*s^2 + {a[1]:.4e}*s + {a[2]:.4e}")
+        print(f"-------------------------------------------------------")
+        
     def fn_plot_bode(self):
         """ Calcula e plota o Diagrama de Bode em escala SEMILOG do filtro completo """
         sos = self.fn_SOS()
@@ -111,12 +140,6 @@ class analogFilt:
         plt.xlim([1, self.fs / 2])
         plt.tight_layout()
         plt.show()
-
-    def fn_filter_signal(self):
-        """ Passa o sinal de entrada pela matriz de seções de segunda ordem (SOS) """
-        sos = self.fn_SOS()
-        # Usando sosfiltfilt para evitar qualquer atraso de fase na integração posterior
-        self.filtered_signal = spy_signal.sosfiltfilt(sos, self.signal)
         
     def fn_plot_signals(self):
         """ Plota o gráfico comparativo do sinal no domínio do tempo """
@@ -132,34 +155,6 @@ class analogFilt:
         plt.tight_layout()
         plt.show()
         
-    def fn_plot_TF(self, b, a, n_sessao):
-        print(f"\n[Seção {n_sessao+1}] H_{n_sessao+1}(s) =")
-        print(f"     {b[0]:.4e}*s^2 + {b[1]:.4e}*s + {b[2]:.4e}")
-        print(f"-------------------------------------------------------")
-        print(f"     {a[0]:.4e}*s^2 + {a[1]:.4e}*s + {a[2]:.4e}")
-        print(f"-------------------------------------------------------")
-        
-    def fn_printAll(self):
-        print("=======================================================")
-        print("========================================================")
-        print("====RELATÓRIO DE COMPONENTES E LISTA DE MATERIAIS=======")
-        print("========================================================")
-        for i in range(0,int(self.order/2)):
-            print(f"================={i} ordem ============================")
-            print("========================================================")
-            print("========================================================")
-            print(f"R={self.R[i]} ohm")
-            print("========================================================")
-            print(f"C={self.C} farad")
-            print("========================================================")
-            print(f"Rf[{i}]={int(self.Rf[i])} ohm")
-            print("========================================================")
-            print(f"Rg[{i}]={int(self.Rg[i])} ohm")
-            print("========================================================")
-            print(f"Q[{i}]={self.Q[i]} ")
-            print("========================================================")
-            
-        self.fn_SOS_TF()
     def fn_plot_fft(self):
         """ Calcula e plota a FFT do sinal bruto e do sinal filtrado """
         # 1. Calcular a transformada e as frequências correspondentes
@@ -195,7 +190,30 @@ class analogFilt:
         plt.xlim([0, 300]) 
         
         plt.tight_layout()
-        plt.show()
+        plt.show()    
+        
+    def fn_printAll(self):
+        print("=======================================================")
+        print("========================================================")
+        print("====RELATÓRIO DE COMPONENTES E LISTA DE MATERIAIS=======")
+        print("========================================================")
+        k = 0
+        for stage in ["primeiro_estagio", "segundo_estagio"]:
+            print("===================================================")
+            print(stage)
+            print("===================================================")
+            for j in [0,1]:
+                print("===================================================")
+                print(f"{j} resistor = {self.R[stage][j]} ohms")
+                print("===================================================")
+            print(f"FATOR DE QUALIDADE = {self.Q[k]}")
+            print("===================================================")
+            k += 1
+        print(f"VALOR DO CAPACITOR = {self.C}")       
+        print("===================================================")
+        self.fn_SOS_TF()
+        
+    
     
 def fn_signal():
     return []
